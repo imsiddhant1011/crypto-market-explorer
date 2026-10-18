@@ -1,0 +1,16 @@
+# =============================================================================
+#  Line endings
+# =============================================================================
+#  The shell scripts (backend/start.sh, database/initdb/*.sh) are executed
+#  *inside Linux containers*. A CRLF (Windows) checkout would break them with
+#  "bad interpreter: /bin/sh^M" or "not found", so every text file is checked
+#  out with LF on every operating system - including Windows machines, where
+#  Git would otherwise convert them.
+# =============================================================================
+* text=auto eol=lf
+
+# The historical market data files must stay byte-for-byte as they were
+# generated: never convert or re-encode them.
+*.csv -text
+*.zip -text
+*.png -text

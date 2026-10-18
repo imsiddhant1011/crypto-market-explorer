@@ -1,0 +1,72 @@
+# =============================================================================
+#  Crypto Market Data Explorer - single command startup
+#
+#      docker compose up --build
+#
+#  Services:
+#    db       PostgreSQL 16 with a persistent volume
+#    backend  FastAPI, initialises the schema, imports data/, serves /api/*
+#    frontend Vite build of the React dashboard on http://localhost:5173
+#
+#  Configuration comes from the optional .env file (see .env.example).
+#  Every value below has a development default, so `docker compose up --build`
+#  works without any local configuration.
+# =============================================================================
+name: crypto-market-explorer
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-crypto}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crypto_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-crypto_market_explorer}
+      # Used by database/initdb/01-create-test-database.sh
+      TEST_DB: ${TEST_DB:-crypto_test}
+    volumes:
+      # Persist the data so restarts do not re-import the CSVs.
+      - db_data:/var/lib/postgresql/data
+      # Runs once on an empty volume; creates the pytest database.
+      - ./database/initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    # Readiness check: other services wait until PostgreSQL answers.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crypto} -d ${POSTGRES_DB:-crypto_market_explorer}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-crypto}:${POSTGRES_PASSWORD:-crypto_dev_password}@db:5432/${POSTGRES_DB:-crypto_market_explorer}
+      TEST_DATABASE_URL: postgresql://${POSTGRES_USER:-crypto}:${POSTGRES_PASSWORD:-crypto_dev_password}@db:5432/${TEST_DB:-crypto_test}
+      DATA_DIR: /data
+      SCHEMA_FILE: /database/init.sql
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-5}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+    volumes:
+      # The historical CSV dataset and the schema, mounted read-only.
+      - ./data:/data:ro
+      - ./database:/database:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Vite bakes this into the JavaScript bundle at build time.
+        VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8000}
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+
+volumes:
+  db_data:

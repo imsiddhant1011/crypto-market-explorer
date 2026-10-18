@@ -1,0 +1,437 @@
+/* =============================================================================
+   Crypto Market Data Explorer - restrained educational dashboard styling.
+   One light theme, no animations, no decorative widgets.
+   ============================================================================= */
+
+:root {
+  --bg: #f6f8fa;
+  --panel: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --accent-soft: #eef2ff;
+  --up: #16a34a;
+  --down: #dc2626;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* ---------------------------------------------------------------- header --- */
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.app-header h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 90ch;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.history-badge {
+  background: var(--accent-soft);
+  color: #3730a3;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- layout --- */
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(340px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.chart-column,
+.education-column {
+  display: grid;
+  /* minmax(0, 1fr) lets these columns shrink: without it the sizing table that
+     Lightweight Charts renders inside the chart holder would keep the column at
+     its own width and the layout could not become narrower. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+h2 {
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 18px 0 6px;
+}
+
+p {
+  margin: 0 0 8px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+/* -------------------------------------------------------------- controls --- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+select {
+  min-width: 230px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.segment {
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segment:last-child {
+  border-right: 0;
+}
+
+.segment:hover:not(.active) {
+  background: #f1f5f9;
+}
+
+.segment.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ---------------------------------------------------------------- charts --- */
+
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.chart-head h2 {
+  margin: 0;
+}
+
+.chart-holder {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* No data on screen: fade the empty grid instead of destroying the charts. */
+.chart-holder-empty {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.price-chart {
+  height: 360px;
+  width: 100%;
+}
+
+/* The volume chart sits directly below the price chart and shares its time axis. */
+.volume-chart {
+  height: 140px;
+  width: 100%;
+  border-top: 1px solid var(--border);
+}
+
+.chart-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+  gap: 10px 20px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.chart-meta div {
+  min-width: 0;
+}
+
+dt {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+dd {
+  margin: 2px 0 0;
+}
+
+.meta-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ----------------------------------------------------------------- states --- */
+
+.state {
+  border: 1px dashed var(--border);
+  background: #fbfdff;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+  color: #334155;
+}
+
+.state p {
+  margin: 6px 0 0;
+}
+
+.state.error {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.state button {
+  margin-top: 10px;
+  padding: 7px 12px;
+  font-size: 13px;
+  color: #991b1b;
+  background: #fff;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------- details --- */
+
+.details-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tag {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 11px;
+}
+
+.tag.up {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.tag.down {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 12px;
+  margin: 12px 0 0;
+}
+
+.details-grid > div {
+  min-width: 0;
+}
+
+.number {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------- education --- */
+
+.sql {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0 0;
+  overflow-x: auto;
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.sql code {
+  font-family: var(--mono);
+  white-space: pre;
+}
+
+.parameters ul,
+.rules {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.parameter-list li,
+.rules li {
+  margin-bottom: 4px;
+}
+
+.parameter-list code {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+.concepts {
+  margin: 0;
+}
+
+.concepts dt {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 10px;
+}
+
+.concepts dd {
+  color: #334155;
+  margin: 2px 0 0;
+}
+
+.education {
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.footnote {
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  margin: 16px 0 0;
+  padding-top: 10px;
+}
+
+/* ----------------------------------------------------------- responsive --- */
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .education {
+    max-height: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .app {
+    padding: 12px;
+  }
+
+  .price-chart {
+    height: 280px;
+  }
+
+  .volume-chart {
+    height: 110px;
+  }
+
+  select {
+    min-width: 100%;
+  }
+
+  .controls {
+    gap: 12px;
+  }
+}

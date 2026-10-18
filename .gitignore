@@ -1,0 +1,20 @@
+# Local environment file (created by copying .env.example)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Node / React
+node_modules/
+dist/
+npm-debug.log*
+vite.config.js.timestamp-*
+
+# Editors and OS files
+.DS_Store
+.idea/
+.vscode/
