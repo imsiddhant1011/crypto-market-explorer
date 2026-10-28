@@ -1,12 +1,15 @@
 # Crypto Market Data Explorer
 
-An educational **DBMS + data-visualisation** project: historical 1-minute
-cryptocurrency candles are stored in PostgreSQL, aggregated into 5m / 15m / 30m
-candles **with SQL**, and displayed as real candlestick and volume charts.
+An educational **DBMS + data-visualisation** project: 30 days of historical
+1-minute candles for seven crypto pairs are stored in PostgreSQL, aggregated into
+5m / 15m / 30m candles **with SQL**, and displayed as real candlestick and volume
+charts. The **DV deliverable** is a Power BI dashboard connected directly to the
+same database.
 
 ```
-React + Vite + TradingView Lightweight Charts   →   FastAPI (Python)   →   PostgreSQL 16
-                                  all three started with: docker compose up --build
+React + Vite + Lightweight Charts (DBMS demo)   →   FastAPI (Python)   →   PostgreSQL 16
+Power BI dashboard (DV deliverable)   ──────────── direct PostgreSQL ────┘
+                                  all services started with: docker compose up --build
 ```
 
 The point of the project is to show how a relational database turns raw market
@@ -18,7 +21,8 @@ data into something you can look at:
   1-minute rows (no pre-computed tables, no client-side aggregation);
 * an index (created by the composite primary key) that serves the
   "one symbol, one time range" query, with a real `EXPLAIN` example;
-* a chart dashboard that only ever displays what the database returned.
+* a chart dashboard that only ever displays what the database returned;
+* read-only `reporting` views and a Power BI report for the DV component.
 
 **This is not a trading platform and the data is not live.** It works completely
 offline from a bundled CSV dataset.
@@ -35,7 +39,7 @@ offline from a bundled CSV dataset.
 6. [The aggregation query, explained](#6-the-aggregation-query-explained)
 7. [Indexes and query plans](#7-indexes-and-query-plans)
 8. [Backend API](#8-backend-api)
-9. [Frontend](#9-frontend)
+9. [Frontend and Power BI](#9-frontend-and-power-bi)
 10. [Setup, start, stop, reset](#10-setup-start-stop-reset)
 11. [Tests](#11-tests)
 12. [Project structure](#12-project-structure)
@@ -46,10 +50,11 @@ offline from a bundled CSV dataset.
 
 ## 1. Project introduction
 
-**Problem.** A month of 1-minute crypto data is over 40,000 rows per trading pair.
-Nobody can read that. Traders and analysts therefore look at *aggregated* candles:
-a 15-minute candle summarises 15 one-minute candles with five numbers
-(open, high, low, close, volume).
+**Problem.** A month of 1-minute crypto data is over 43,000 rows per trading pair
+(302,400 rows for the seven pairs in this project). Nobody can read that. Traders
+and analysts therefore look at *aggregated* candles: a 15-minute candle
+summarises 15 one-minute candles with five numbers (open, high, low, close,
+volume).
 
 **Goal.** Show that this summarising is a database job, not a JavaScript job.
 The application therefore stores *only* 1-minute candles and asks PostgreSQL for
@@ -57,9 +62,11 @@ The application therefore stores *only* 1-minute candles and asks PostgreSQL for
 
 **What the application does**
 
-* lets the user pick **BTCUSDT** or **ETHUSDT** (loaded from the `symbols` table);
+* lets the user pick one of **seven pairs** — BTCUSDT, ETHUSDT, BNBUSDT, SOLUSDT,
+  XRPUSDT, ADAUSDT or DOGEUSDT (loaded from the `symbols` table);
 * lets the user pick a timeframe: **5m, 15m, 30m** (default 15m);
-* lets the user pick a historical range: **last 24 hours** (default) or last 7 days;
+* lets the user pick a historical range: **1 day** (default), **1 week** or
+  **1 month** (30 days);
 * draws real OHLC candlesticks and a volume histogram underneath them;
 * shows the OHLCV values of any candle the user clicks;
 * shows the **exact SQL query** that produced the visible chart, with an
@@ -95,34 +102,41 @@ runtime, no pre-computed candle tables, no arbitrary SQL execution.
                         │  PostgreSQL 16 (docker volume)           │
                         │  symbols(symbol PK, ...)                 │
                         │  candles(symbol, open_time) PK, 1-minute │
+                        │  reporting.* views for Power BI (DV)     │
                         └──────────────────────────────────────────┘
                                         ▲
                                         │ one-time import (idempotent)
                         ┌───────────────┴──────────────────────────┐
-                        │  data/BTCUSDT.csv, data/ETHUSDT.csv      │
-                        │  7 days of real 1-minute candles         │
+                        │  data/{SYMBOL}.csv — 7 symbols           │
+                        │  30 days of real 1-minute candles        │
                         │  (downloaded once, then offline)         │
                         └──────────────────────────────────────────┘
 ```
+
+**DV deliverable.** Power BI can connect directly to the same PostgreSQL
+database and import the `reporting` views; it does not go through FastAPI. The
+full Power BI setup, DAX measures and report layout are in
+[`powerbi/README.md`](powerbi/README.md).
 
 ### Startup order (what `docker compose up --build` does)
 
 1. **db** starts PostgreSQL 16, creates the databases and the volume, and reports
    healthy through a `pg_isready` healthcheck.
 2. **backend** waits for that healthcheck, then `backend/start.sh` runs
-   `python -m app.init_db` → applies `database/init.sql` (tables + symbol seed,
-   idempotent) → runs `python import_data.py` → imports the CSV files
-   (idempotent: duplicates are skipped) → starts uvicorn on port 8000.
+   `python -m app.init_db` → applies `database/init.sql` (tables, symbol seed and
+   the `reporting` views, idempotent) → runs `python import_data.py` → imports
+   the CSV files (idempotent: duplicates are skipped) → starts uvicorn on port
+   8000.
 3. **frontend** serves the built React bundle (Vite preview) on port 5173.
 
 ### The CSV import process
 
 ```
-data/BTCUSDT.csv ─┐
-                  ├─► import_data.py ─► validate every row ─► INSERT ... ON CONFLICT DO NOTHING ─► candles table
-data/ETHUSDT.csv ─┘        │                                        │
-                           └─ report: accepted / rejected /           └─ rerunnable: existing rows are kept,
-                              duplicates / gaps / stored range           nothing is duplicated or overwritten
+data/{SYMBOL}.csv (7 files) ─┐
+                             ├─► import_data.py ─► validate every row ─► INSERT ... ON CONFLICT DO NOTHING ─► candles
+                             │        │                                        │
+                             │        └─ report: accepted / rejected /         └─ rerunnable: existing rows are kept,
+                             │           duplicates / gaps / stored range         nothing is duplicated or overwritten
 ```
 
 Details in [section 4](#4-the-historical-dataset).
@@ -136,6 +150,7 @@ Details in [section 4](#4-the-historical-dataset).
 | **Plain PostgreSQL** (not TimescaleDB) | The project is about *core* SQL: `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY`, constraints and indexes. `date_bin()` ships with PostgreSQL 14+, so time bucketing needs no extension, and the schema stays readable enough to explain in a viva. | TimescaleDB continuous aggregates would be faster on huge datasets, but they would hide the SQL this project exists to demonstrate, and they would add an extension the teacher cannot inspect in plain `psql`. |
 | **FastAPI** | Gives request validation (`Literal` allowlists, types) for free, produces interactive API docs at `/docs`, and is thin enough that the whole backend is ~4 small files. | A heavier framework (Django) would bring an ORM and admin UI; both are unnecessary here because the SQL is the subject of the project. |
 | **React + Vite** | Component state is a natural fit for "selected pair / timeframe / range / selected candle", and Vite builds the bundle in well under a second. | A plain HTML page with `fetch` would work too; React was chosen because the assignment asks for it and it keeps the chart/candle/panel state tidy. |
+| **Power BI** (DV deliverable) | The DV course requires a BI tool. Power BI connects directly to PostgreSQL, imports the `reporting` views, and gives slicers, KPI cards and a candlestick custom visual without writing a second API. | Power BI Desktop is Windows-only, so on macOS it needs a Windows VM or Power BI Service. Import mode must be refreshed after a re-import; the web dashboard remains the zero-setup option. |
 | **TradingView Lightweight Charts** | Purpose-built for financial candles: it draws real OHLC candles, has a histogram series for volume, handles zoom/pan, and is small (~40 kB gzipped). | It is a charting library, not a trading UI: no indicators, no order book, no live feed (which this project does not want anyway). |
 | **Historical CSV files instead of a WebSocket** | The DBMS topics (schema, keys, aggregation, indexes) only need *data*, not a live stream. Files can be diffed, re-imported deterministically and checked into the repository, so the project runs offline and produces identical results every time. | No live "wow" effect. A WebSocket client would add reconnection logic and non-reproducible state for no benefit to the SQL demonstration. |
 | **psycopg 3** | Small, well-documented PostgreSQL driver with real parameter binding and native `NUMERIC` → `Decimal` handling. | An ORM (SQLAlchemy) would generate the SQL for us, which is exactly what we want to *see* and explain. |
@@ -151,17 +166,18 @@ Details in [section 4](#4-the-historical-dataset).
 | --- | --- |
 | Source | Binance public historical market data, `https://data.binance.vision/` → *Spot → Daily klines* (1-minute archives) |
 | Exact URLs | `https://data.binance.vision/data/spot/daily/klines/{SYMBOL}/1m/{SYMBOL}-1m-{YYYY-MM-DD}.zip` |
-| Prepared / downloaded on | **2026-10-18** (the day after the newest included day, so every day is complete) |
-| Symbols | `BTCUSDT`, `ETHUSDT` |
-| Covered range (both files) | **2026-10-11 00:00:00 UTC → 2026-10-17 23:59:00 UTC** — exactly 7 consecutive days |
-| Records per symbol | **10,080** 1-minute candles (7 × 24 × 60) |
-| Gaps / invalid rows | **none** — the series is continuous, and every row passed the importer's validation |
+| Prepared / downloaded on | **2026-10-29** (the 2026-10-28 archive was not published yet, so 2026-10-27 is the newest complete day) |
+| Symbols | `BTCUSDT`, `ETHUSDT`, `BNBUSDT`, `SOLUSDT`, `XRPUSDT`, `ADAUSDT`, `DOGEUSDT` |
+| Covered range (all files) | **2026-09-28 00:00:00 UTC → 2026-10-27 23:59:00 UTC** — exactly 30 consecutive days |
+| Records per symbol | **43,200** 1-minute candles (30 × 24 × 60) |
+| Total records | **302,400** (7 symbols × 43,200) |
+| Gaps / invalid rows | **none** — every series is continuous, and every row passed the importer's validation |
 | Timestamp convention | Unix epoch milliseconds in the source archives, stored as `TIMESTAMPTZ` in UTC; `open_time` is the *start* of the minute |
-| Files in this repository | `data/BTCUSDT.csv`, `data/ETHUSDT.csv` (columns: `open_time,open,high,low,close,volume`) |
-| Re-download | `python3 data/download_dataset.py --days 7 --end-date 2026-10-17` (needs internet, only for regenerating the files) |
+| Files in this repository | `data/{SYMBOL}.csv` for the seven symbols (columns: `open_time,open,high,low,close,volume`) |
+| Re-download | `python3 data/download_dataset.py --days 30 --end-date 2026-10-27` (needs internet, only for regenerating the files) |
 
 The `open_time` values are written as ISO-8601 UTC strings
-(`2026-10-11T00:00:00Z`) so the CSV can be read in a spreadsheet without
+(`2026-09-28T00:00:00Z`) so the CSV can be read in a spreadsheet without
 timezone surprises. Prices and volumes are copied through as text, so the
 precision published by Binance is preserved — nothing is rounded by this project.
 
@@ -172,7 +188,7 @@ its *"Binance Data Collection – Terms of Use"* from the data site
 (`https://data.binance.vision/terms-of-use.html`). They are used here for
 non-commercial, educational purposes. This project is **not** affiliated with,
 sponsored by or endorsed by Binance, and it redistributes only a small
-seven-day slice of publicly published data. If you want to reuse the dataset for
+30-day slice of publicly published data. If you want to reuse the dataset for
 something commercial, read Binance's current terms yourself. Candlestick charts
 are drawn with TradingView's [Lightweight Charts](https://github.com/tradingview/lightweight-charts)
 (Apache-2.0), which renders the small "Charting by TradingView" attribution link.
@@ -209,22 +225,23 @@ Example run (first import, real output):
 
 ```
 [import] data directory: /data
-[import] files: BTCUSDT.csv, ETHUSDT.csv
+[import] files: ADAUSDT.csv, BNBUSDT.csv, BTCUSDT.csv, DOGEUSDT.csv,
+                ETHUSDT.csv, SOLUSDT.csv, XRPUSDT.csv
 
 [import] BTCUSDT.csv -> symbol BTCUSDT
-         rows read .......... 10080
-         accepted ........... 10080
+         rows read .......... 43200
+         accepted ........... 43200
          rejected ........... 0
          duplicates in file . 0
-         inserted ........... 10080
+         inserted ........... 43200
          already in database  0 (skipped, existing rows kept)
          missing minutes ..... 0 (continuous 1-minute series)
-         stored range  ....... 2026-10-11T00:00:00Z .. 2026-10-17T23:59:00Z
+         stored range  ....... 2026-09-28T00:00:00Z .. 2026-10-27T23:59:00Z
 ...
-[import] finished: 20160 rows inserted, 0 rows rejected.
+[import] finished: 302400 rows inserted, 0 rows rejected.
 ```
 
-Running it a second time inserts 0 rows and reports `already in database 10080`
+Running it a second time inserts 0 rows and reports `already in database 43200`
 for each pair. To replace stored data on purpose, reset the database
 (see [section 10](#10-setup-start-stop-reset)).
 
@@ -232,7 +249,8 @@ for each pair. To replace stored data on purpose, reset the database
 
 ## 5. Database schema
 
-`database/init.sql` is the whole schema. It creates **two** application tables.
+`database/init.sql` is the whole schema. It creates **two** application tables
+plus a read-only `reporting` schema with views for the Power BI dashboard.
 
 ```
    ┌──────────────────────────────┐              ┌─────────────────────────────────────────┐
@@ -246,9 +264,13 @@ for each pair. To replace stored data on purpose, reset the database
               ▲                                  │ close     NUMERIC          NOT NULL     │
               │                                  │ volume    NUMERIC          NOT NULL     │
         seeded rows:                             └─────────────────────────────────────────┘
-        BTCUSDT  BTC / USDT  "Bitcoin / Tether"   PRIMARY KEY (symbol, open_time)
-        ETHUSDT  ETH / USDT  "Ether / Tether"     FOREIGN KEY (symbol) → symbols(symbol)
-                                                  CHECKs on prices, volume and OHLC order
+        BTCUSDT   BTC / USDT   "Bitcoin / Tether"  PRIMARY KEY (symbol, open_time)
+        ETHUSDT   ETH / USDT   "Ether / Tether"    FOREIGN KEY (symbol) → symbols(symbol)
+        BNBUSDT   BNB / USDT   "BNB / Tether"      CHECKs on prices, volume and OHLC order
+        SOLUSDT   SOL / USDT   "Solana / Tether"
+        XRPUSDT   XRP / USDT   "XRP / Tether"
+        ADAUSDT   ADA / USDT   "Cardano / Tether"
+        DOGEUSDT  DOGE / USDT  "Dogecoin / Tether"
 ```
 
 ### `symbols` — which trading pairs exist
@@ -260,7 +282,7 @@ for each pair. To replace stored data on purpose, reset the database
 | `quote_asset` | `VARCHAR(10)` | `NOT NULL` — e.g. `USDT` (the currency it is priced in) |
 | `display_name` | `VARCHAR(100)` | `NOT NULL` — shown in the dropdown |
 
-The two supported pairs are inserted by the same script with
+The seven supported pairs are inserted by the same script with
 `ON CONFLICT (symbol) DO NOTHING`, so seeding is idempotent. The frontend reads
 this table through `GET /api/symbols`; nothing in React hard-codes the pairs.
 
@@ -295,6 +317,24 @@ The database therefore refuses inconsistent rows *before* they can reach a chart
 no matter who inserts them. `backend/tests/test_constraints.py` proves each of
 these rules by trying to break it.
 
+### `reporting` — read-only views for Power BI
+
+The `reporting` schema is the serving layer for the **DV deliverable** (Power BI).
+It is created by the same `init.sql` and contains no stored data:
+
+* `reporting.candles_1m`, `candles_5m`, `candles_15m`, `candles_30m` — one view
+  per timeframe, using the same `date_bin()` + `HAVING` rules as the API;
+* `reporting.candles` — a `UNION ALL` of the four views, with `interval` and
+  `interval_minutes` columns, so Power BI can switch timeframe with one slicer;
+* `reporting.daily_candles` — one complete UTC day per row (1,440 source
+  minutes), used for the month overview and return KPIs;
+* `reporting.latest_prices` and `reporting.symbol_summary` — convenience views
+  for cards and dataset-coverage tables.
+
+The 1-minute `candles` table remains the single source of truth. Power BI imports
+these views; full setup instructions are in
+[`powerbi/README.md`](powerbi/README.md).
+
 ---
 
 ## 6. The aggregation query, explained
@@ -325,8 +365,8 @@ Step by step:
 
 1. **`WHERE symbol = %(symbol)s AND open_time >= %(window_start)s AND open_time < %(window_end)s`**
    Runs *before* grouping. It keeps only the rows of one pair inside the selected
-   window (one day or seven days). Fewer rows to aggregate, and it is the part of
-   the query the primary-key index can serve.
+   window (one day, one week or one month). Fewer rows to aggregate, and it is
+   the part of the query the primary-key index can serve.
 2. **`date_bin(INTERVAL '15 minutes', open_time, TIMESTAMPTZ '1970-01-01 …')`**
    Time bucketing: every minute is mapped to the start of the 15-minute bucket it
    belongs to (`00:00`, `00:15`, `00:30`, …). The third argument is the origin;
@@ -367,8 +407,10 @@ Identical source rows, different bucket width and different completeness rule:
    └── 30m → 1 candle  per 30 minutes, built from 30 source rows       (HAVING count(*) = 30)
 ```
 
-So a full 24-hour window contains **288 five-minute**, **96 fifteen-minute** or
-**48 thirty-minute** candles — exactly what the dashboard displays.
+So a one-day window contains **288 five-minute**, **96 fifteen-minute** or
+**48 thirty-minute** candles — exactly what the dashboard displays. A one-week
+window contains 2,016 / 672 / 336 candles, and a one-month (30-day) window
+contains 8,640 / 2,880 / 1,440 candles.
 
 ### Why `MAX(close)` would be wrong
 
@@ -386,10 +428,14 @@ so a query with the wrong functions fails immediately.
 `backend/app/queries.py` holds the SQL text **and** the text that explains it, and
 the API returns both in one response. The frontend displays
 `education.sql`, which is literally the same string that was sent to PostgreSQL —
-there is no second copy that could drift out of date. The placeholders
+the API has no second copy that could drift out of date. The placeholders
 (`%(symbol)s`, `%(window_start)s`, `%(window_end)s`) are the parameters that were
 bound to that statement, and the API returns their values too, so the panel can
 show exactly which window was queried.
+
+The Power BI views in `database/init.sql` mirror the same OHLCV rules for the DV
+dashboard. They are a separate read-only serving layer; the web API still runs
+the query shown above, so the teaching panel always reflects the API request.
 
 ---
 
@@ -429,60 +475,58 @@ SELECT date_bin(INTERVAL '15 minutes', open_time, TIMESTAMPTZ '1970-01-01 00:00:
        sum(volume) AS volume, count(*) AS source_candles
 FROM candles
 WHERE symbol = 'BTCUSDT'
-  AND open_time >= TIMESTAMPTZ '2026-10-17 00:00:00+00'
-  AND open_time <  TIMESTAMPTZ '2026-10-18 00:00:00+00'
+  AND open_time >= TIMESTAMPTZ '2026-10-27 00:00:00+00'
+  AND open_time <  TIMESTAMPTZ '2026-10-28 00:00:00+00'
 GROUP BY bucket_start
 HAVING count(*) = 15
 ORDER BY bucket_start;
 ```
 
 ```
- GroupAggregate  (cost=364.90..421.45 rows=7 width=176) (actual time=1.069..2.477 rows=96 loops=1)
+ GroupAggregate  (cost=2136.95..2192.22 rows=7 width=176) (actual time=0.402..1.080 rows=96 loops=1)
    Group Key: (date_bin('00:15:00'::interval, open_time, '1970-01-01 00:00:00+00'::timestamp with time zone))
    Filter: (count(*) = 15)
-   Buffers: shared hit=27
-   ->  Sort  (cost=364.90..368.49 rows=1439 width=51) (actual time=0.970..1.058 rows=1440 loops=1)
+   Buffers: shared hit=29
+   ->  Sort  (cost=2136.95..2140.42 rows=1391 width=47) (actual time=0.372..0.410 rows=1440 loops=1)
          Sort Key: (date_bin(...)), open_time
          Sort Method: quicksort  Memory: 181kB
-         ->  Bitmap Heap Scan on candles  (cost=42.63..289.41 rows=1439 width=51) (actual time=0.221..0.552 rows=1440 loops=1)
-               Recheck Cond: (((symbol)::text = 'BTCUSDT'::text) AND (open_time >= '2026-10-17 00:00:00+00') AND (open_time < '2026-10-18 00:00:00+00'))
-               Heap Blocks: exact=17
-               ->  Bitmap Index Scan on candles_pkey  (cost=0.00..42.28 rows=1439 width=0) (actual time=0.190..0.190 rows=1440 loops=1)
-                     Index Cond: (((symbol)::text = 'BTCUSDT'::text) AND (open_time >= '2026-10-17 00:00:00+00') AND (open_time < '2026-10-18 00:00:00+00'))
+         ->  Index Scan using candles_pkey on candles  (cost=0.42..2064.32 rows=1391 width=47) (actual time=0.026..0.187 rows=1440 loops=1)
+               Index Cond: (((symbol)::text = 'BTCUSDT'::text) AND (open_time >= '2026-10-27 00:00:00+00') AND (open_time < '2026-10-28 00:00:00+00'))
+               Buffers: shared hit=26
 ```
 
 Reading it from the inside out:
 
-* **`Bitmap Index Scan on candles_pkey`** — PostgreSQL used the primary-key index,
+* **`Index Scan using candles_pkey`** — PostgreSQL used the primary-key index,
   with `symbol = 'BTCUSDT'` *and* the time window as the index condition. This is
-  exactly the access path the composite key was designed for.
-* **`Bitmap Heap Scan`** — the matching rows are fetched from the table
-  (`Heap Blocks: exact=17`, i.e. only 17 table pages were touched).
+  exactly the access path the composite key was designed for. On the larger
+  30-day table the planner prefers a plain range scan over a bitmap scan.
 * **`Sort` + `GroupAggregate`** — the rows are sorted by `(bucket_start, open_time)`
   and then grouped. `GroupAggregate` (instead of `HashAggregate`) is what makes
   the ordered `array_agg(... ORDER BY open_time)` cheap.
 * **`Filter: (count(*) = 15)`** — the `HAVING`: 96 groups survived, so exactly 96
   complete 15-minute candles were returned.
-* **`Buffers: shared hit=27`** — everything was already in the cache; no disk
+* **`Buffers: shared hit=29`** — everything was already in the cache; no disk
   reads were needed for this query.
 
 A narrow window uses the index even more directly (this is the same query shape
 with a five-minute window):
 
 ```
- HashAggregate  (cost=4.44..4.50 rows=1 width=16) (actual time=0.062..0.062 rows=0 loops=1)
-   Group Key: date_bin('00:15:00'::interval, open_time, '1970-01-01 00:00:00+00'::timestamp with time zone)
+ GroupAggregate  (cost=15.61..15.81 rows=1 width=176) (actual time=0.058..0.059 rows=0 loops=1)
+   Group Key: (date_bin('00:15:00'::interval, open_time, '1970-01-01 00:00:00+00'::timestamp with time zone))
    Filter: (count(*) = 15)
    Rows Removed by Filter: 1
-   ->  Index Only Scan using candles_pkey on candles  (cost=0.29..4.41 rows=5 width=8) (actual time=0.056..0.057 rows=5 loops=1)
-         Index Cond: ((symbol = 'BTCUSDT'::text) AND (open_time >= '2026-10-17 12:00:00+00') AND (open_time < '2026-10-17 12:05:00+00'))
-         Heap Fetches: 0
+   Buffers: shared hit=8
+   ->  Sort  (cost=15.61..15.62 rows=5 width=47) (actual time=0.036..0.036 rows=5 loops=1)
+         Sort Key: (date_bin(...)), open_time
+         ->  Index Scan using candles_pkey on candles  (cost=0.42..15.55 rows=5 width=47) (actual time=0.019..0.021 rows=5 loops=1)
+               Index Cond: (((symbol)::text = 'BTCUSDT'::text) AND (open_time >= '2026-10-27 12:00:00+00') AND (open_time < '2026-10-27 12:05:00+00'))
 ```
 
-`Index Only Scan … Heap Fetches: 0` means the answer came **from the index alone**
-— the table was never touched. The result is `rows=0` because five minutes can
-never fill a fifteen-minute bucket; the `HAVING` threw the incomplete group away,
-which is the completeness rule working.
+The index range scan touches only the five requested minutes. The result is
+`rows=0` because five minutes can never fill a fifteen-minute bucket; the
+`HAVING` threw the incomplete group away, which is the completeness rule working.
 
 ### How to interpret a plan (the short version)
 
@@ -500,15 +544,15 @@ which is the completeness rule working.
 
 * **An index is not automatically faster.** On a *small* table PostgreSQL often
   chooses a sequential scan on purpose, because reading a few small pages
-  sequentially can beat the overhead of walking an index. With the 20,160 rows of
-  this dataset the planner used the index, but on a tiny test table (the pytest
-  fixtures use a handful of rows) it may well decide that a `Seq Scan` is cheaper
+  sequentially can beat the overhead of walking an index. With the 302,400 rows
+  of this dataset the planner used the index, but on a tiny test table (the
+  pytest fixtures use a handful of rows) it may well decide that a `Seq Scan` is cheaper
   — that is a *correct* decision, not a missing index.
 * Plans depend on **statistics** (`ANALYZE`), on how much of the table the filter
   is expected to return, on caching, on the `work_mem` setting, and on the
   PostgreSQL version. Run `EXPLAIN` yourself; do not memorise this output.
 * An index speeds up reads but slows down writes and costs storage
-  (`candles_pkey` is about 640 kB next to a 1.7 MB table here), which is why
+  (`candles_pkey` is about 9.7 MB next to a 25 MB table here), which is why
   unused indexes are avoided.
 * The plan above is the reason the query is *written* the way it is (symbol and
   time range in `WHERE`, both covered by the same composite key). This project
@@ -519,28 +563,33 @@ which is the completeness rule working.
 ## 8. Backend API
 
 Base URL `http://localhost:8000`. Interactive docs: `/docs`. All responses are
-JSON; all timestamps are UTC in ISO-8601 (`2026-10-17T23:59:00Z`).
+JSON; all timestamps are UTC in ISO-8601 (`2026-10-27T23:59:00Z`).
 
 ### `GET /api/symbols`
 
 ```json
 {
   "symbols": [
+    {"symbol": "ADAUSDT", "base_asset": "ADA", "quote_asset": "USDT", "display_name": "Cardano / Tether"},
+    {"symbol": "BNBUSDT", "base_asset": "BNB", "quote_asset": "USDT", "display_name": "BNB / Tether"},
     {"symbol": "BTCUSDT", "base_asset": "BTC", "quote_asset": "USDT", "display_name": "Bitcoin / Tether"},
-    {"symbol": "ETHUSDT", "base_asset": "ETH", "quote_asset": "USDT", "display_name": "Ether / Tether"}
+    {"symbol": "DOGEUSDT", "base_asset": "DOGE", "quote_asset": "USDT", "display_name": "Dogecoin / Tether"},
+    {"symbol": "ETHUSDT", "base_asset": "ETH", "quote_asset": "USDT", "display_name": "Ether / Tether"},
+    {"symbol": "SOLUSDT", "base_asset": "SOL", "quote_asset": "USDT", "display_name": "Solana / Tether"},
+    {"symbol": "XRPUSDT", "base_asset": "XRP", "quote_asset": "USDT", "display_name": "XRP / Tether"}
   ]
 }
 ```
 
 Read from the `symbols` table — the dropdown is not hard-coded in React.
 
-### `GET /api/candles?symbol=BTCUSDT&interval=15m&range=24h`
+### `GET /api/candles?symbol=BTCUSDT&interval=15m&range=1d`
 
 | Parameter | Allowed values | Default | Validation |
 | --- | --- | --- | --- |
 | `symbol` | any symbol that exists in the `symbols` table | required | unknown value → **400** with the list of supported symbols |
 | `interval` | `5m`, `15m`, `30m` | `15m` | explicit allowlist (`Literal`) → other values → **422** |
-| `range` | `24h`, `7d` | `24h` | explicit allowlist → other values → **422** |
+| `range` | `1d`, `1w`, `1m` | `1d` | explicit allowlist → other values → **422** |
 
 Response (abridged):
 
@@ -551,22 +600,22 @@ Response (abridged):
   "interval": "15m",
   "interval_minutes": 15,
   "interval_seconds": 900,
-  "range": "24h",
-  "range_label": "Latest 24 hours of imported data",
+  "range": "1d",
+  "range_label": "Latest 1 day of imported data",
   "timezone": "UTC",
-  "window_start": "2026-10-17T00:00:00Z",
-  "window_end": "2026-10-18T00:00:00Z",
-  "dataset_first_timestamp": "2026-10-11T00:00:00Z",
-  "dataset_last_timestamp": "2026-10-17T23:59:00Z",
+  "window_start": "2026-10-27T00:00:00Z",
+  "window_end": "2026-10-28T00:00:00Z",
+  "dataset_first_timestamp": "2026-09-28T00:00:00Z",
+  "dataset_last_timestamp": "2026-10-27T23:59:00Z",
   "source_candles_per_bucket": 15,
   "candle_count": 96,
   "candles": [
-    {"time": 1792195200, "open": 81615.91, "high": 81633.36, "low": 81572.66, "close": 81633.35, "volume": 251.83045}
+    {"time": 1793059200, "open": 80150.56, "high": 80318.68, "low": 80131.66, "close": 80227.01, "volume": 122.71986}
   ],
   "education": {
     "title": "How 15m candles are calculated",
     "sql": "SELECT ... FROM candles WHERE symbol = %(symbol)s AND ... HAVING count(*) = 15 ...",
-    "parameters": {"symbol": "BTCUSDT", "window_start": "2026-10-17T00:00:00Z", "window_end": "2026-10-18T00:00:00Z"},
+    "parameters": {"symbol": "BTCUSDT", "window_start": "2026-10-27T00:00:00Z", "window_end": "2026-10-28T00:00:00Z"},
     "explanation": "PostgreSQL stores only 1-minute candles. ...",
     "ohlcv_rules": ["Open - the open of the earliest 1-minute candle ...", "..."],
     "completeness_rule": "A 15m bucket is returned only when it contains all 15 ...",
@@ -585,9 +634,9 @@ Response (abridged):
   away, and it is deliberate — the chart library can only plot floating point.
 * `window_start`/`window_end` describe the *queried* window: it ends at the first
   bucket boundary at or after `max(open_time) + 1 minute`, and starts a fixed
-  range before it (**exclusive** end, **inclusive** start). Because both range
-  lengths are whole numbers of buckets, every bucket inside the window is
-  complete or absent — never half-queried.
+  range (1 day, 1 week or 30 days) before it (**exclusive** end, **inclusive**
+  start). Because all three range lengths are whole numbers of buckets, every
+  bucket inside the window is complete or absent — never half-queried.
 * `dataset_first_timestamp` / `dataset_last_timestamp` are the oldest and newest
   stored 1-minute candles, i.e. what the database actually contains.
 * An empty result is a normal response: `"candle_count": 0, "candles": []`. The
@@ -596,7 +645,7 @@ Response (abridged):
 ### `GET /api/health`
 
 ```json
-{"status": "ok", "database": "reachable", "symbols": 2, "candles": 20160, "latest_candle_utc": "2026-10-17T23:59:00Z"}
+{"status": "ok", "database": "reachable", "symbols": 7, "candles": 302400, "latest_candle_utc": "2026-10-27T23:59:00Z"}
 ```
 
 Returns **503** with `{"status": "error", "database": "unreachable", "detail": "…"}`
@@ -616,10 +665,10 @@ when PostgreSQL cannot be reached.
 
 ---
 
-## 9. Frontend
+## 9. Frontend and Power BI
 
 **Left column** — trading-pair dropdown (from `/api/symbols`), timeframe buttons
-(5m / 15m / 30m), historical-range buttons (last 24 hours / last 7 days),
+(5m / 15m / 30m), historical-range buttons (1 day / 1 week / 1 month),
 the candlestick chart, the volume histogram below it, a footer with the chart
 window and the last stored 1-minute timestamp, and the **selected candle** panel.
 
@@ -632,7 +681,7 @@ interval.
 Behaviour worth knowing:
 
 * **No client-side aggregation.** React only draws the array the API returned.
-* **The default view is the latest 24 hours of data that exists in the database**
+* **The default view is the latest 1 day of data that exists in the database**
   — anchored on `max(open_time)`, not on the computer clock, so a historical
   dataset is displayed correctly offline.
 * **Green candle when `close >= open`, red when `close < open`** (Lightweight
@@ -656,6 +705,23 @@ Behaviour worth knowing:
   historical, no ticking prices, no "live" badge, and the footer states the exact
   covered range.
 
+### Power BI dashboard (DV deliverable)
+
+The DV part of the assignment can be submitted as a **Power BI report** instead
+of the React charts. Power BI connects directly to the same PostgreSQL database;
+the FastAPI backend is not involved.
+
+* Connect to `localhost:5432`, database `crypto_market_explorer` (Import mode).
+* Load `symbols` and the `reporting.candles` / `reporting.daily_candles` views.
+* Use `interval` as a slicer (1m / 5m / 15m / 30m) and `bucket_start` as the time
+  axis; the views already return complete OHLCV candles.
+* A ready-made connection file, Power Query queries, DAX measures, theme and a
+  step-by-step report layout are in [`powerbi/README.md`](powerbi/README.md).
+
+Power BI Desktop is Windows-only; on macOS use a Windows VM or Power BI Service
+with an on-premises data gateway. The database views and credentials are the
+same either way.
+
 ---
 
 ## 10. Setup, start, stop, reset
@@ -664,7 +730,9 @@ Behaviour worth knowing:
 
 [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Docker Engine
 + Compose v2). Nothing else — Python, Node and PostgreSQL all run inside
-containers. (Docker must be running.)
+containers. (Docker must be running.) For the DV deliverable, install Power BI
+Desktop on Windows (or use Power BI Service); see
+[`powerbi/README.md`](powerbi/README.md).
 
 ### Start everything (one command)
 
@@ -707,7 +775,7 @@ backend or the tests outside Docker.
 ### Running it on another computer (for example after cloning from GitHub)
 
 Everything the application needs is in the repository — the historical CSVs
-(~1.8 MB), the schema, the frontend build configuration. The only requirements
+(~25 MB for 302,400 rows), the schema, the frontend build configuration. The only requirements
 on the other machine are Docker Desktop (installed **and running**) and internet
 access for the *first* `docker compose up --build`, which downloads the base
 images and the Python/Node dependencies (a few minutes; the resulting images are
@@ -719,7 +787,7 @@ Things that can go wrong on a fresh machine, and the fix:
 | --- | --- | --- |
 | `Cannot connect to the Docker daemon` | Docker Desktop is not running | start Docker Desktop and run the command again |
 | `Bind for 0.0.0.0:5432 failed: port is already allocated` | a local PostgreSQL (or another service) already uses the port | `cp .env.example .env`, change `POSTGRES_PORT` (and/or `BACKEND_PORT`/`FRONTEND_PORT`), then `docker compose up --build` again |
-| The dashboard shows "Cannot reach the API" on the very first start | the backend is still importing the 20,160 CSV rows | wait ~15 seconds and press **Try again**; check `docker compose logs backend` |
+| The dashboard shows "Cannot reach the API" on the very first start | the backend is still importing the 302,400 CSV rows | wait ~30–60 seconds and press **Try again**; check `docker compose logs backend` |
 | Windows: the backend container exits with `./start.sh: not found` or `bad interpreter` | the shell scripts were checked out with Windows line endings | already prevented by the `.gitattributes` file in this repository — make sure it is committed, and re-clone if you copied the files by hand instead of cloning |
 
 One limitation worth knowing: the frontend is a static bundle that is **compiled
@@ -780,7 +848,7 @@ cd frontend && npm install && npm run dev     # http://localhost:5173
 
 ## 11. Tests
 
-62 tests, all passing, all offline. They run against a **separate database**
+68 tests, all passing, all offline. They run against a **separate database**
 (`crypto_test`, created when the PostgreSQL volume is initialised) so they never
 touch the imported market data.
 
@@ -789,9 +857,10 @@ docker compose exec backend pytest -v
 ```
 
 ```
-tests/test_aggregation.py  ..............   14 passed
-tests/test_api.py          .............................   29 passed
-tests/test_constraints.py  ...................   19 passed
+tests/test_aggregation.py      ..............   15 passed
+tests/test_api.py              ..............................   30 passed
+tests/test_constraints.py      ...................   19 passed
+tests/test_reporting_views.py  ....                   4 passed
 ```
 
 `backend/tests/test_aggregation.py` — the OHLCV maths on small, hand-checked
@@ -832,6 +901,13 @@ datasets:
 * the composite primary key is the only index on `candles`, it is UNIQUE and its
   first column is `symbol`.
 
+`backend/tests/test_reporting_views.py` — the Power BI serving layer:
+
+* `reporting.candles` exposes 1m / 5m / 15m / 30m rows for the same source data;
+* the 15m view returns the correct OHLCV and source-candle count;
+* incomplete buckets are dropped by the views exactly as they are by the API;
+* `daily_candles`, `latest_prices` and `symbol_summary` return the expected rows.
+
 The tests need no internet connection: the pytest fixtures build their own
 candles in SQL.
 
@@ -847,8 +923,13 @@ crypto-market-explorer/
 ├── .gitattributes                # keeps shell scripts LF-only on every OS
 ├── README.md
 ├── data/
-│   ├── BTCUSDT.csv               # 10,080 real 1-minute candles (2026-10-11 .. 2026-10-17)
-│   ├── ETHUSDT.csv               # 10,080 real 1-minute candles
+│   ├── BTCUSDT.csv               # 43,200 real 1-minute candles (2026-09-28 .. 2026-10-27)
+│   ├── ETHUSDT.csv               # 43,200 real 1-minute candles
+│   ├── BNBUSDT.csv               # 43,200 real 1-minute candles
+│   ├── SOLUSDT.csv               # 43,200 real 1-minute candles
+│   ├── XRPUSDT.csv               # 43,200 real 1-minute candles
+│   ├── ADAUSDT.csv               # 43,200 real 1-minute candles
+│   ├── DOGEUSDT.csv              # 43,200 real 1-minute candles
 │   └── download_dataset.py       # how the CSVs were produced (needs internet)
 ├── database/
 │   ├── init.sql                  # schema, constraints, symbol seed (single source of truth)
@@ -870,7 +951,14 @@ crypto-market-explorer/
 │       ├── conftest.py           # test database fixtures
 │       ├── test_aggregation.py
 │       ├── test_api.py
-│       └── test_constraints.py
+│       ├── test_constraints.py
+│       └── test_reporting_views.py   # Power BI views
+├── powerbi/
+│   ├── README.md                 # Power BI setup, model, DAX and report layout
+│   ├── crypto-market-explorer.pbids
+│   ├── powerquery.m              # Power Query queries
+│   ├── measures.dax              # DAX measures
+│   └── theme.json                # report colour theme
 └── frontend/
     ├── Dockerfile
     ├── package.json / package-lock.json
@@ -894,14 +982,16 @@ crypto-market-explorer/
 
 ## 13. Limitations
 
-* **Historical, not live.** The bundled dataset covers 2026-10-11 → 2026-10-17.
+* **Historical, not live.** The bundled dataset covers 2026-09-28 → 2026-10-27.
   Nothing in the application polls or streams: no WebSocket, no live prices, no
   order book, no trading.
-* **Two symbols, three timeframes, two ranges.** The design generalises (add a
-  row to `symbols`, add an entry to `INTERVALS` in `queries.py`), but only
-  BTCUSDT/ETHUSDT and 5m/15m/30m are seeded and validated on purpose.
-* **Seven days of data.** Longer windows would need more CSV files or a wider
+* **Seven symbols, three timeframes, three ranges.** The design generalises (add
+  a row to `symbols`, add an entry to `INTERVALS` in `queries.py`), but only the
+  seven seeded pairs, 5m/15m/30m and 1d/1w/1m are seeded and validated on purpose.
+* **30 days of data.** Longer windows would need more CSV files or a wider
   download; the query itself does not change.
+* **Power BI Desktop is Windows-only.** The database and views work on any OS;
+  for the DV report on macOS use a Windows VM or Power BI Service with a gateway.
 * **First build needs internet** to pull Docker base images and pip/npm
   dependencies. Runtime does not, and neither do the tests.
 * **Not production infrastructure.** Single PostgreSQL instance, a small
@@ -937,7 +1027,7 @@ This is the referential-integrity rule.
 
 **4. Why are there two tables?**
 To avoid repetition and inconsistency. The asset names (`BTC`, `USDT`,
-"Bitcoin / Tether") belong to the pair, not to each of the 10,080 candles per
+"Bitcoin / Tether") belong to the pair, not to each of the 43,200 candles per
 pair. Storing them once in `symbols` means a rename happens in one place, and the
 foreign key guarantees the two tables agree. That is normalisation: each fact is
 stored once.
@@ -1019,10 +1109,10 @@ missing minutes in the CSV files. Filling gaps by copying the previous price
 would silently create data that never traded.
 
 **16. Why is the default window anchored on the newest row instead of `now()`?**
-Because the dataset is historical. `WHERE open_time >= now() - INTERVAL '24 hours'`
+Because the dataset is historical. `WHERE open_time >= now() - INTERVAL '1 day'`
 would match nothing today and the chart would be empty. Using
 `window_end = first bucket boundary at or after max(open_time) + 1 minute` and
-`window_start = window_end - 24 hours` (or 7 days) shows the newest data that
+`window_start = window_end - 1 day` (or 1 week / 30 days) shows the newest data that
 actually exists, and the dashboard displays that range and the last stored
 timestamp so the user is never misled.
 
@@ -1051,9 +1141,11 @@ README.
 docker compose up --build         # start everything (first run needs internet)
 docker compose down               # stop (keep the data)
 docker compose down -v            # stop and delete the database volume
-docker compose exec backend pytest -v                     # run the 62 tests
+docker compose exec backend pytest -v                     # run the 68 tests
 docker compose exec backend python import_data.py         # re-import the CSVs (safe)
 docker compose exec db psql -U crypto -d crypto_market_explorer   # psql prompt
 ```
 
-Dashboard <http://localhost:5173> · API <http://localhost:8000/docs>
+Dashboard <http://localhost:5173> · API <http://localhost:8000/docs> ·
+Power BI: open `powerbi/crypto-market-explorer.pbids` on Windows (or follow
+`powerbi/README.md`)

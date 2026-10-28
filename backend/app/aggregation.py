@@ -10,7 +10,7 @@ Timestamp convention
 Everything is UTC and the window is aligned to interval boundaries:
 
     window_end   = the first bucket boundary at or after "last stored minute + 1 minute"
-    window_start = window_end - the requested range (24h or 7d)
+    window_start = window_end - the requested range (1d, 1w or 1m)
 
 Because 5, 15 and 30 minutes all divide 24 hours exactly, the window always
 starts and ends on a bucket boundary. That is what lets the SQL use a plain

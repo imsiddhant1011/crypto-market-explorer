@@ -9,7 +9,7 @@ import VolumeChart from './components/VolumeChart'
 import { formatUtcTimestamp } from './format'
 
 const DEFAULT_TIMEFRAME = '15m'
-const DEFAULT_RANGE = '24h'
+const DEFAULT_RANGE = '1d'
 
 export default function App() {
   const [symbols, setSymbols] = useState([])

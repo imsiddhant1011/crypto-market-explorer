@@ -1,0 +1,15 @@
+{
+  "name": "Crypto Market Explorer",
+  "dataColors": [
+    "#16A34A",
+    "#DC2626",
+    "#0EA5E9",
+    "#F59E0B",
+    "#8B5CF6",
+    "#14B8A6",
+    "#64748B"
+  ],
+  "background": "#FFFFFF",
+  "foreground": "#1E293B",
+  "tableAccent": "#0EA5E9"
+}

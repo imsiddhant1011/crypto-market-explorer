@@ -35,7 +35,7 @@ logger = logging.getLogger("crypto_market_explorer")
 # (an unknown value is answered with HTTP 422 before any SQL is prepared), and
 # the assertion guarantees the API never drifts from queries.INTERVALS/RANGES.
 SUPPORTED_INTERVALS = ("5m", "15m", "30m")
-SUPPORTED_RANGES = ("24h", "7d")
+SUPPORTED_RANGES = ("1d", "1w", "1m")
 assert set(SUPPORTED_INTERVALS) == set(queries.INTERVALS), "interval allowlist out of sync"
 assert set(SUPPORTED_RANGES) == set(queries.RANGES), "range allowlist out of sync"
 
@@ -120,7 +120,7 @@ def get_root() -> dict:
     return {
         "name": "Crypto Market Data Explorer API",
         "data": "historical (not live)",
-        "endpoints": ["/api/symbols", "/api/candles?symbol=BTCUSDT&interval=15m&range=24h", "/api/health"],
+        "endpoints": ["/api/symbols", "/api/candles?symbol=BTCUSDT&interval=15m&range=1m", "/api/health"],
         "documentation": "/docs",
     }
 
@@ -144,10 +144,10 @@ def get_candles(
         queries.DEFAULT_INTERVAL,
         description="Candle size. Aggregated from 1-minute data with SQL.",
     ),
-    range_name: Literal["24h", "7d"] = Query(  # type: ignore[assignment]
+    range_name: Literal["1d", "1w", "1m"] = Query(  # type: ignore[assignment]
         queries.DEFAULT_RANGE,
         alias="range",
-        description="Historical range, measured back from the newest imported candle.",
+        description="Historical range (1 day, 1 week or 1 month), measured back from the newest imported candle.",
     ),
 ) -> dict:
     """

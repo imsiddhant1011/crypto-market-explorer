@@ -1,0 +1,70 @@
+-- Crypto Market Data Explorer - DAX measures
+--
+-- Table names used below (rename the Power Query queries exactly like this):
+--   Symbols       : symbols (dimension)
+--   Candles       : reporting.candles (fact, 1m/5m/15m/30m)
+--   DailyCandles  : reporting.daily_candles (fact, one row per day)
+--   LatestPrices  : reporting.latest_prices (one row per symbol)
+--
+-- Create these with Modeling -> New measure. `--` starts a DAX comment.
+
+-- The display name of the pair selected in the slicer.
+Selected Pair =
+SELECTEDVALUE ( Symbols[display_name] )
+
+-- Last close of the newest imported minute (cards). Works when one pair is
+-- selected; use the slicer in single-select mode.
+Latest Close =
+IF (
+    HASONEVALUE ( Symbols[symbol] ),
+    SUM ( LatestPrices[last_close] )
+)
+
+-- Highest and lowest price in the current timeframe/date selection.
+Period High = MAX ( Candles[high] )
+Period Low = MIN ( Candles[low] )
+
+-- Total traded volume in the current selection.
+Period Volume = SUM ( Candles[volume] )
+
+-- Number of candles currently visible in the chart.
+Candle Count = COUNTROWS ( Candles )
+
+-- Return from the first open to the last close of the selected window.
+Period Return % =
+VAR FirstOpen =
+    CALCULATE ( MIN ( Candles[open] ), FIRSTDATE ( Candles[bucket_start] ) )
+VAR LastClose =
+    CALCULATE ( MAX ( Candles[close] ), LASTDATE ( Candles[bucket_start] ) )
+RETURN
+    DIVIDE ( LastClose - FirstOpen, FirstOpen )
+
+-- Daily return for the daily-candles table / column chart.
+Daily Return % =
+DIVIDE (
+    SUM ( DailyCandles[close] ) - SUM ( DailyCandles[open] ),
+    SUM ( DailyCandles[open] )
+)
+
+-- 30-day high and low for the market-overview cards.
+30-Day High =
+CALCULATE (
+    MAX ( DailyCandles[high] ),
+    DATESINPERIOD ( DailyCandles[day_start], MAX ( DailyCandles[day_start] ), -30, DAY )
+)
+
+30-Day Low =
+CALCULATE (
+    MIN ( DailyCandles[low] ),
+    DATESINPERIOD ( DailyCandles[day_start], MAX ( DailyCandles[day_start] ), -30, DAY )
+)
+
+-- Number of complete UTC days available for the selected pair.
+Days Covered = DISTINCTCOUNT ( DailyCandles[day_start] )
+
+-- Average daily volume over the selected period.
+Average Daily Volume =
+AVERAGEX (
+    VALUES ( DailyCandles[day_start] ),
+    CALCULATE ( SUM ( DailyCandles[volume] ) )
+)

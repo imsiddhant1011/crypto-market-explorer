@@ -63,7 +63,7 @@ FROM symbols
 ORDER BY symbol;"""
 
 # Oldest and newest stored 1-minute candle for one symbol. `max(open_time)` is
-# what makes the default view "the latest 24 hours of data we actually have"
+# what makes the default view "the latest 1 day of data we actually have"
 # instead of "the last 24 hours according to the computer clock".
 DATASET_RANGE_SQL = """\
 SELECT min(open_time) AS first_open_time,
@@ -102,25 +102,30 @@ class IntervalDefinition:
 class RangeDefinition:
     """One supported historical range."""
 
-    name: str  # "24h" - the value used in the API
+    name: str  # "1d" - the value used in the API
     duration: timedelta
     label: str
 
 
 RANGES: dict[str, RangeDefinition] = {
-    "24h": RangeDefinition(
-        name="24h",
-        duration=timedelta(hours=24),
-        label="Latest 24 hours of imported data",
+    "1d": RangeDefinition(
+        name="1d",
+        duration=timedelta(days=1),
+        label="Latest 1 day of imported data",
     ),
-    "7d": RangeDefinition(
-        name="7d",
-        duration=timedelta(days=7),
-        label="Latest 7 days of imported data",
+    "1w": RangeDefinition(
+        name="1w",
+        duration=timedelta(weeks=1),
+        label="Latest 1 week of imported data",
+    ),
+    "1m": RangeDefinition(
+        name="1m",
+        duration=timedelta(days=30),
+        label="Latest 1 month (30 days) of imported data",
     ),
 }
 
-DEFAULT_RANGE = "24h"
+DEFAULT_RANGE = "1d"
 DEFAULT_INTERVAL = "15m"
 
 
@@ -214,7 +219,7 @@ def _build_interval(minutes: int) -> IntervalDefinition:
         {
             "name": "sum(volume) - additive measures",
             "detail": (
-                "Volume is additive: the volume traded in the 15 minutes of a bucket is the sum "
+                f"Volume is additive: the volume traded in the {minutes} minutes of a bucket is the sum "
                 "of the volume traded in each of those minutes."
             ),
         },

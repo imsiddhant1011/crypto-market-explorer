@@ -5,8 +5,9 @@
 const TIMEFRAMES = ['5m', '15m', '30m']
 
 const RANGES = [
-  { value: '24h', label: 'Last 24 hours' },
-  { value: '7d', label: 'Last 7 days' },
+  { value: '1d', label: '1 day' },
+  { value: '1w', label: '1 week' },
+  { value: '1m', label: '1 month' },
 ]
 
 export default function MarketSelector({

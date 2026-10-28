@@ -41,7 +41,15 @@ def test_symbols_endpoint_returns_the_seeded_pairs(client):
 
     assert response.status_code == 200
     symbols = {item["symbol"]: item for item in response.json()["symbols"]}
-    assert set(symbols) == {"BTCUSDT", "ETHUSDT"}
+    assert set(symbols) == {
+        "BTCUSDT",
+        "ETHUSDT",
+        "BNBUSDT",
+        "SOLUSDT",
+        "XRPUSDT",
+        "ADAUSDT",
+        "DOGEUSDT",
+    }
     assert symbols["BTCUSDT"] == {
         "symbol": "BTCUSDT",
         "base_asset": "BTC",
@@ -49,6 +57,8 @@ def test_symbols_endpoint_returns_the_seeded_pairs(client):
         "display_name": "Bitcoin / Tether",
     }
     assert symbols["ETHUSDT"]["display_name"] == "Ether / Tether"
+    assert symbols["SOLUSDT"]["display_name"] == "Solana / Tether"
+    assert symbols["DOGEUSDT"]["base_asset"] == "DOGE"
 
 
 def test_symbols_come_from_the_database_not_from_hardcoded_records(client, db_connection):
@@ -81,7 +91,7 @@ def test_candles_endpoint_returns_chart_ready_data(insert_candles, client):
     insert_day(insert_candles)
 
     response = client.get(
-        "/api/candles", params={"symbol": "BTCUSDT", "interval": "15m", "range": "24h"}
+        "/api/candles", params={"symbol": "BTCUSDT", "interval": "15m", "range": "1d"}
     )
 
     assert response.status_code == 200
@@ -89,7 +99,7 @@ def test_candles_endpoint_returns_chart_ready_data(insert_candles, client):
     assert data["symbol"] == "BTCUSDT"
     assert data["display_name"] == "Bitcoin / Tether"
     assert data["interval"] == "15m"
-    assert data["range"] == "24h"
+    assert data["range"] == "1d"
     assert data["timezone"] == "UTC"
     assert data["candle_count"] == 96
     assert len(data["candles"]) == 96
@@ -115,7 +125,7 @@ def test_default_interval_and_range_are_applied(insert_candles, client):
     data = client.get("/api/candles", params={"symbol": "BTCUSDT"}).json()
 
     assert data["interval"] == "15m"
-    assert data["range"] == "24h"
+    assert data["range"] == "1d"
     assert data["candle_count"] == 96
 
 
@@ -178,11 +188,11 @@ def test_empty_dataset_returns_an_empty_chart(insert_candles, client):
 
 
 def test_unknown_symbol_is_rejected(client):
-    response = client.get("/api/candles", params={"symbol": "DOGEUSDT"})
+    response = client.get("/api/candles", params={"symbol": "NOPEUSDT"})
 
     assert response.status_code == 400
     detail = response.json()["detail"]
-    assert "DOGEUSDT" in detail
+    assert "NOPEUSDT" in detail
     assert "BTCUSDT" in detail and "ETHUSDT" in detail
 
 
@@ -199,7 +209,9 @@ def test_invalid_interval_is_rejected(client, interval):
     assert response.status_code == 422
 
 
-@pytest.mark.parametrize("range_name", ["1h", "30d", "all", "24h; DROP TABLE candles"])
+@pytest.mark.parametrize(
+    "range_name", ["1h", "30d", "all", "7d", "24h; DROP TABLE candles"]
+)
 def test_invalid_range_is_rejected(client, range_name):
     response = client.get(
         "/api/candles", params={"symbol": "BTCUSDT", "range": range_name}
@@ -208,15 +220,15 @@ def test_invalid_range_is_rejected(client, range_name):
     assert response.status_code == 422
 
 
-def test_seven_day_range_only_returns_stored_data(insert_candles, client):
+def test_one_month_range_only_returns_stored_data(insert_candles, client):
     insert_day(insert_candles)
 
     data = client.get(
-        "/api/candles", params={"symbol": "BTCUSDT", "range": "7d"}
+        "/api/candles", params={"symbol": "BTCUSDT", "range": "1m"}
     ).json()
 
-    # Only one day is stored, so a seven-day window still returns 96 candles.
-    assert data["range"] == "7d"
+    # Only one day is stored, so a one-month window still returns 96 candles.
+    assert data["range"] == "1m"
     assert data["candle_count"] == 96
 
 
@@ -280,7 +292,7 @@ def test_health_reports_a_working_database(insert_candles, client):
     body = response.json()
     assert body["status"] == "ok"
     assert body["database"] == "reachable"
-    assert body["symbols"] == 2
+    assert body["symbols"] == 7
     assert body["candles"] == 1440
     assert body["latest_candle_utc"] == "2026-01-01T23:59:00Z"
 

@@ -26,14 +26,14 @@ The script writes `data/{SYMBOL}.csv` with exactly six columns:
 
     open_time,open,high,low,close,volume
 
-`open_time` is ISO-8601 UTC (e.g. 2026-10-11T00:00:00Z). Prices and volumes are
+`open_time` is ISO-8601 UTC (e.g. 2026-09-28T00:00:00Z). Prices and volumes are
 copied through as text, so the precision published by Binance is preserved - the
 script never rounds values.
 
 Usage
 -----
-    python3 data/download_dataset.py                      # latest 7 complete days
-    python3 data/download_dataset.py --days 7 --end-date 2026-10-17
+    python3 data/download_dataset.py                      # latest 30 complete days
+    python3 data/download_dataset.py --days 30 --end-date 2026-10-27
 
 The application itself never downloads anything at runtime; the generated CSV
 files are committed to the repository and imported into PostgreSQL by
@@ -53,7 +53,15 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 BASE_URL = "https://data.binance.vision/data/spot/daily/klines"
-SYMBOLS = ("BTCUSDT", "ETHUSDT")
+SYMBOLS = (
+    "BTCUSDT",
+    "ETHUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "XRPUSDT",
+    "ADAUSDT",
+    "DOGEUSDT",
+)
 OUTPUT_DIR = Path(__file__).resolve().parent
 CSV_HEADER = ["open_time", "open", "high", "low", "close", "volume"]
 # Binance CSV columns after open_time; only the first five are needed.
@@ -161,7 +169,7 @@ def build_symbol(symbol: str, start_day: date, days: int) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--days", type=int, default=7, help="number of consecutive daily archives (default: 7)")
+    parser.add_argument("--days", type=int, default=30, help="number of consecutive daily archives (default: 30)")
     parser.add_argument(
         "--end-date",
         type=date.fromisoformat,

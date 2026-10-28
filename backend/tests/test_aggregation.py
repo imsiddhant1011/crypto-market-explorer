@@ -28,7 +28,7 @@ def epoch(moment: datetime) -> int:
     return int(moment.timestamp())
 
 
-def fetch_candles(client, symbol: str = "BTCUSDT", interval: str = "15m", range_name: str = "24h") -> dict:
+def fetch_candles(client, symbol: str = "BTCUSDT", interval: str = "15m", range_name: str = "1d") -> dict:
     response = client.get(
         "/api/candles", params={"symbol": symbol, "interval": interval, "range": range_name}
     )
@@ -198,14 +198,18 @@ def test_buckets_outside_the_selected_range_are_excluded(insert_candles, client)
     rows = [minute_row(BASE_TIME + timedelta(minutes=index), "100", "105") for index in range(1440 * 2)]
     insert_candles("BTCUSDT", rows)
 
-    day = fetch_candles(client, "BTCUSDT", "15m", "24h")
+    day = fetch_candles(client, "BTCUSDT", "15m", "1d")
     assert day["candle_count"] == 96
     assert day["window_start"] == "2026-01-02T00:00:00Z"
     assert day["window_end"] == "2026-01-03T00:00:00Z"
 
-    week = fetch_candles(client, "BTCUSDT", "15m", "7d")
+    week = fetch_candles(client, "BTCUSDT", "15m", "1w")
     assert week["candle_count"] == 96 * 2  # only two days of data exist
     assert week["window_start"] == "2025-12-27T00:00:00Z"
+
+    month = fetch_candles(client, "BTCUSDT", "15m", "1m")
+    assert month["candle_count"] == 96 * 2
+    assert month["window_start"] == "2025-12-04T00:00:00Z"
 
 
 # ---------------------------------------------------------------------------
@@ -229,11 +233,11 @@ def test_ceil_to_bucket_rounds_up_to_the_next_boundary():
     [("5m", 288), ("15m", 96), ("30m", 48)],
 )
 def test_window_contains_whole_buckets_only(interval, expected_candles):
-    """The default window is 24 hours wide and always ends on a bucket boundary."""
+    """The default window is one day wide and always ends on a bucket boundary."""
     last_minute = datetime(2026, 1, 7, 23, 59, tzinfo=UTC)
 
     start, end = aggregation.align_window(
-        last_minute, queries.INTERVALS[interval], queries.RANGES["24h"]
+        last_minute, queries.INTERVALS[interval], queries.RANGES["1d"]
     )
 
     assert start == datetime(2026, 1, 7, 0, 0, tzinfo=UTC)
@@ -241,12 +245,23 @@ def test_window_contains_whole_buckets_only(interval, expected_candles):
     assert (end - start) // timedelta(minutes=queries.INTERVALS[interval].minutes) == expected_candles
 
 
-def test_seven_day_window_is_anchored_on_the_last_minute():
+def test_one_week_window_is_anchored_on_the_last_minute():
     last_minute = datetime(2026, 1, 7, 23, 59, tzinfo=UTC)
 
     start, end = aggregation.align_window(
-        last_minute, queries.INTERVALS["15m"], queries.RANGES["7d"]
+        last_minute, queries.INTERVALS["15m"], queries.RANGES["1w"]
     )
 
     assert end == datetime(2026, 1, 8, 0, 0, tzinfo=UTC)
     assert start == datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
+
+
+def test_one_month_window_is_anchored_on_the_last_minute():
+    last_minute = datetime(2026, 1, 7, 23, 59, tzinfo=UTC)
+
+    start, end = aggregation.align_window(
+        last_minute, queries.INTERVALS["15m"], queries.RANGES["1m"]
+    )
+
+    assert end == datetime(2026, 1, 8, 0, 0, tzinfo=UTC)
+    assert start == datetime(2025, 12, 9, 0, 0, tzinfo=UTC)

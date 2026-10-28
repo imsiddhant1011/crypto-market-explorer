@@ -1,0 +1,15 @@
+{
+  "version": "0.1",
+  "connections": [
+    {
+      "details": {
+        "protocol": "postgresql",
+        "address": {
+          "server": "localhost:5432",
+          "database": "crypto_market_explorer"
+        }
+      },
+      "mode": "Import"
+    }
+  ]
+}
