@@ -1,0 +1,23 @@
+relationship Symbols_Candles
+	fromColumn: Candles.symbol
+	toColumn: Symbols.symbol
+
+relationship Symbols_DailyCandles
+	fromColumn: DailyCandles.symbol
+	toColumn: Symbols.symbol
+
+relationship Symbols_LatestPrices
+	fromColumn: LatestPrices.symbol
+	toColumn: Symbols.symbol
+
+relationship Symbols_SymbolSummary
+	fromColumn: SymbolSummary.symbol
+	toColumn: Symbols.symbol
+
+relationship Date_Candles
+	fromColumn: Candles.bucket_date
+	toColumn: Date.Date
+
+relationship Date_DailyCandles
+	fromColumn: DailyCandles.day_start
+	toColumn: Date.Date

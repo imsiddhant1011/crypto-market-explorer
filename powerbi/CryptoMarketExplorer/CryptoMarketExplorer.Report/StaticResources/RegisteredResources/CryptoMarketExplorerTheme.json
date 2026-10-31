@@ -1,0 +1,46 @@
+{
+  "name": "CryptoMarketExplorerTheme.json",
+  "dataColors": [
+    "#16A34A",
+    "#DC2626",
+    "#0EA5E9",
+    "#F59E0B",
+    "#8B5CF6",
+    "#14B8A6",
+    "#64748B"
+  ],
+  "background": "#FFFFFF",
+  "foreground": "#1E293B",
+  "tableAccent": "#0EA5E9",
+  "textClasses": {
+    "label": {
+      "color": "#475569",
+      "fontSize": 10,
+      "fontFace": "Segoe UI"
+    },
+    "callout": {
+      "color": "#0F172A",
+      "fontSize": 24,
+      "fontFace": "Segoe UI Semibold",
+      "fontWeight": "bold"
+    },
+    "title": {
+      "color": "#0F172A",
+      "fontSize": 12,
+      "fontFace": "Segoe UI Semibold",
+      "fontWeight": "bold"
+    },
+    "header": {
+      "color": "#1E293B",
+      "fontSize": 10,
+      "fontFace": "Segoe UI Semibold",
+      "fontWeight": "bold"
+    },
+    "largeTitle": {
+      "color": "#0F172A",
+      "fontSize": 16,
+      "fontFace": "Segoe UI Semibold",
+      "fontWeight": "bold"
+    }
+  }
+}

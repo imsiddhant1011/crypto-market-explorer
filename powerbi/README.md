@@ -18,10 +18,72 @@ Power BI Desktop ── PostgreSQL (Import) ──► reporting.candles / report
 
 | File | Purpose |
 | --- | --- |
-| `crypto-market-explorer.pbids` | Double-click to open Power BI Desktop with the PostgreSQL connection pre-filled (Windows). |
-| `powerquery.m` | Power Query (M) queries for the five tables. Paste each one into **Advanced Editor** if you prefer not to use the Navigator. |
+| `CryptoMarketExplorer/` | **Ready-made Power BI Project (PBIP)**: semantic model, 19 measures, theme and a three-page report. Open it on Windows and save it as `.pbix` (section 1.1). |
+| `build_pbip.py` | Regenerates `CryptoMarketExplorer/` from the model definition and `theme.json`. |
+| `crypto-market-explorer.pbids` | Connection shortcut only — it pre-fills the PostgreSQL connection but contains no model, data or visuals. |
+| `powerquery.m` | Power Query (M) queries for the five tables. Use these only if you build a report from scratch. |
 | `measures.dax` | DAX measures for the KPI cards and comparison page. |
 | `theme.json` | Report colour theme (green/red candles, slate text, sky-blue accent). |
+| `templates/Fluent2-CY26SU10.json` | Base theme copied into the generated report. |
+
+---
+
+## 1.1 Ready-made PBIP project (recommended on macOS)
+
+> A `.pbids` file is **only a connection shortcut**. It contains no semantic
+> model, no data and no visuals, so there is nothing in it to convert into a
+> `.pbix`.
+>
+> Power BI Desktop is Windows-only, and Microsoft only supports saving a PBIP as
+> a PBIX **from Power BI Desktop**. The project below is the complete dashboard
+> in the officially supported Power BI Project (PBIP) format. Open it on Windows
+> and use **File → Save as → Power BI file (*.pbix)**.
+
+`powerbi/CryptoMarketExplorer/` contains:
+
+| Path | Contents |
+| --- | --- |
+| `CryptoMarketExplorer.pbip` | Project shortcut — open this on Windows. |
+| `CryptoMarketExplorer.SemanticModel/` | TMDL model: 6 tables (including a date table), 19 measures, relationships and PostgreSQL M queries. |
+| `CryptoMarketExplorer.Report/` | Theme and three PBIR pages with 31 visuals. |
+
+**On the Windows machine**
+
+1. Install the latest 64-bit **Power BI Desktop**.
+2. Copy the whole `powerbi/CryptoMarketExplorer/` folder to Windows. Keep the
+   `.pbip`, `.Report` and `.SemanticModel` items together; the `.pbip` on its own
+   is only a shortcut.
+3. Make the PostgreSQL database reachable:
+   * **Same Windows machine:** run `docker compose up -d db backend` in the
+     repository and keep `localhost:5432`.
+   * **Windows VM on the Mac, or a different PC:** `localhost` is not the Docker
+     host. In Power BI choose **Home → Transform data → Edit parameters** and set
+     `PostgresServer` to the DB host's LAN IP. The compose file publishes port
+     5432 on all interfaces; allow it through the host firewall.
+4. Double-click `CryptoMarketExplorer.pbip` (or **File → Open**). The first open
+   loads the model definition **without data**, so the visuals are blank until
+   the first refresh.
+5. **Home → Refresh**. Enter the credentials from section 2
+   (`crypto` / `crypto_dev_password`). If Power BI asks for the Npgsql provider,
+   install the 64-bit Npgsql provider and restart Desktop.
+6. **File → Save as → Power BI file (*.pbix)**. After the refresh the `.pbix`
+   embeds the imported data and is self-contained. Name it
+   `crypto-market-explorer.pbix` if you want to keep the project's file name.
+
+The report opens on **Market Overview**; the other pages are **Compare Pairs**
+and **Data Quality**. The pair slicer starts on Bitcoin, the timeframe on 15m,
+and the date slicer covers the full 28 Sep – 27 Oct 2026 range. Change any of
+them in the report.
+
+Regenerate the project after editing the script or theme:
+
+```bash
+python3 powerbi/build_pbip.py
+```
+
+The generated project is checked with Microsoft's PBIR validator (0 errors) and
+pbiplint (0 errors). The remaining pbiplint notices are style suggestions
+(decimal instead of double, extra hidden columns, theme colours).
 
 ---
 
@@ -51,6 +113,11 @@ The database is then available on the host at `localhost:5432`:
 
 These are the local development values from `.env.example`; change them in
 `.env` if you use different credentials.
+
+> If Power BI runs in a Windows VM or on another PC, `localhost` is **not** the
+> Docker host. Change `PostgresServer` in the PBIP
+> (**Home → Transform data → Edit parameters**) to the host's LAN IP, and make
+> sure port 5432 is reachable from Windows.
 
 ---
 
@@ -224,26 +291,33 @@ same timestamp and the visual cannot draw one candle per bucket.
 If custom visuals are not allowed in your environment, use a **Line and
 clustered column chart**: line = `close`, columns = `volume`, axis =
 `bucket_start`. It is less decorative but uses only native visuals and tells the
-same story.
+same story. The ready-made PBIP uses this native fallback, so it does not depend
+on any AppSource visual.
 
 ---
 
 ## 8. DAX measures
 
-Open `measures.dax` and create each measure with **Modeling → New measure**.
-The important ones:
+The ready-made PBIP already contains all 19 measures; this section is for
+building a report from scratch. Open `measures.dax` and create each measure with
+**Modeling → New measure**. The important ones:
 
 | Measure | Used for |
 | --- | --- |
 | `Latest Close` | KPI card; requires one selected pair |
+| `Close Price` / `Daily Close` | line charts (aggregate the price correctly per time bucket) |
 | `Period High` / `Period Low` | KPI cards |
-| `Period Volume` | KPI card / volume comparison |
+| `Period Volume` / `Daily Volume` | KPI card / daily volume chart |
 | `Candle Count` | data-quality cards |
+| `All Interval Rows` | data-quality card that ignores the interval slicer |
 | `Period Return %` | first open → last close of the selection |
 | `Daily Return %` | line chart on the comparison page |
 | `30-Day High` / `30-Day Low` | month cards |
 | `Days Covered` | coverage card |
 | `Average Daily Volume` | comparison table |
+| `Data Through` | freshness card |
+| `Selected Pair` / `Pairs Compared` | page context cards |
+| `1m Candles` | coverage bar chart |
 
 Keep the symbol and interval slicers in **single-select** mode for the candle
 page. `Period Return %` is defined as the first open and the last close of the
@@ -268,8 +342,11 @@ The report uses **Import** mode, so Power BI stores a snapshot:
 * after `docker compose up` finishes importing, press **Refresh** in Power BI
   Desktop;
 * after replacing the CSV files or resetting the database, refresh all tables;
-* if you change `POSTGRES_PORT` in `.env`, edit the PostgreSQL source in
-  **Transform data → Data source settings**.
+* if you change `POSTGRES_PORT` in `.env`, edit the `PostgresServer` parameter in
+  **Transform data → Edit parameters** (the ready-made PBIP uses a parameter);
+* the PBIP's date table is fixed to **2026-09-28 → 2026-10-27**. If you import a
+  different date range, update the `CALENDAR` bounds in `tables/Date.tmdl` (or
+  remove the date table and use the fact-table date columns directly).
 
 DirectQuery also works, but the `reporting.candles` view aggregates 302,400
 source rows per query; Import is faster for a classroom demo.
@@ -278,16 +355,22 @@ source rows per query; Import is faster for a classroom demo.
 
 ## 11. macOS note
 
-Power BI Desktop is Windows-only. On macOS you have three options:
+Power BI Desktop is Windows-only. The supported route from macOS is:
 
-1. run Power BI Desktop in a Windows VM (Parallels/UTM/VMware) and connect to
-   `localhost:5432` (the Docker port is published on the Mac host);
-2. use **Power BI Service** in a browser and an on-premises data gateway to
-   reach the local PostgreSQL;
-3. use the React dashboard for the live demo and submit the Power BI report
-   built on a Windows machine.
+1. **Recommended:** open `CryptoMarketExplorer.pbip` on a Windows PC or VM
+   (section 1.1), refresh, then use **File → Save as → `.pbix`**. PBIP is a
+   text-based project format, so it can be committed and copied like source
+   code; only the final PBIX conversion needs Desktop.
+2. Run Power BI Desktop in a Windows VM (Parallels/UTM/VMware) and point
+   `PostgresServer` at the Mac's LAN IP if `localhost` is not shared with the VM.
+3. Use **Power BI Service** in a browser and an on-premises data gateway to
+   reach the PostgreSQL database.
+4. Use the React dashboard for the live demo and submit the `.pbix` built on a
+   Windows machine.
 
-The database, the views and the `.pbids`/M/DAX files are OS-independent.
+A `.pbids` file is only a connection shortcut and cannot be converted to
+`.pbix` on its own. The database, the views and the PBIP/M/DAX files are all
+OS-independent.
 
 ---
 
@@ -295,7 +378,10 @@ The database, the views and the `.pbids`/M/DAX files are OS-independent.
 
 | Symptom | Fix |
 | --- | --- |
-| `The server was not found` / connection refused | `docker compose ps` — is `db` healthy? Is port 5432 published? |
+| No `.pbix` file in this folder | Open `CryptoMarketExplorer/CryptoMarketExplorer.pbip` on Windows, refresh, then **File → Save as → Power BI file (*.pbix)** (section 1.1). |
+| PBIP opens but every visual is blank | The first open has no cached data. Start the database, then **Home → Refresh**. |
+| “Cannot load the project” / PBIR schema error | Update Power BI Desktop to the latest version. The project uses the October 2026 PBIR schema. |
+| `The server was not found` / connection refused | `docker compose ps` — is `db` healthy? Is port 5432 published? If Desktop is in a VM or on another PC, is `PostgresServer` the host's LAN IP? |
 | Password authentication failed | Use the values in `.env` / `.env.example`; the default is `crypto` / `crypto_dev_password`. |
 | Navigator shows no `reporting` schema | The backend has not applied `database/init.sql` yet. Run `docker compose up -d backend` and check `docker compose logs backend`; or apply `database/init.sql` manually with `psql`. |
 | Candlestick is empty | The timeframe slicer has multiple intervals selected, or the date slicer excludes the bucket. Select one interval and a date range inside 2026-09-28–2026-10-27. |

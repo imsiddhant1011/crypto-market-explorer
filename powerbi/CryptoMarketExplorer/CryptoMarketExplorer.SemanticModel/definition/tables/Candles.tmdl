@@ -1,0 +1,122 @@
+table Candles
+	column symbol
+		dataType: string
+		isHidden
+		isAvailableInMdx: false
+		sourceColumn: symbol
+	column interval
+		dataType: string
+		sourceColumn: interval
+	column interval_minutes
+		dataType: int64
+		isHidden
+		isAvailableInMdx: false
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: interval_minutes
+	column bucket_start
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:mm
+		summarizeBy: none
+		sourceColumn: bucket_start
+	column open
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: open
+	column high
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: high
+	column low
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: low
+	column close
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: close
+	column volume
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0
+		summarizeBy: none
+		sourceColumn: volume
+	column source_candles
+		dataType: int64
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0
+		summarizeBy: none
+		sourceColumn: source_candles
+	column bucket_date = DATE ( YEAR ( Candles[bucket_start] ), MONTH ( Candles[bucket_start] ), DAY ( Candles[bucket_start] ) )
+		dataType: dateTime
+		isHidden
+		isAvailableInMdx: false
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+	/// Close price at the current candle granularity.
+	measure 'Close Price' = AVERAGE ( Candles[close] )
+		formatString: #,0.00##
+	/// Highest price in the current selection.
+	measure 'Period High' = MAX ( Candles[high] )
+		formatString: #,0.00##
+	/// Lowest price in the current selection.
+	measure 'Period Low' = MIN ( Candles[low] )
+		formatString: #,0.00##
+	/// Total traded volume in the current selection.
+	measure 'Period Volume' = SUM ( Candles[volume] )
+		formatString: #,0
+	/// Number of candle rows in the current selection.
+	measure 'Candle Count' = COUNTROWS ( Candles )
+		formatString: #,0
+	/// Number of candle rows across all intervals, ignoring the interval slicer.
+	measure 'All Interval Rows' = CALCULATE ( COUNTROWS ( Candles ), REMOVEFILTERS ( Candles[interval] ) )
+		formatString: #,0
+	/// Return from the first open to the last close of the selected window.
+	measure 'Period Return %' =
+			VAR FirstOpen =
+			    CALCULATE ( MIN ( Candles[open] ), FIRSTDATE ( Candles[bucket_start] ) )
+			VAR LastClose =
+			    CALCULATE ( MAX ( Candles[close] ), LASTDATE ( Candles[bucket_start] ) )
+			RETURN
+			    DIVIDE ( LastClose - FirstOpen, FirstOpen )
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+	/// Latest candle timestamp in the current selection.
+	measure 'Data Through' = MAX ( Candles[bucket_start] )
+		formatString: yyyy-mm-dd hh:mm
+	partition Candles = m
+		mode: import
+		source =
+			let
+			    Source = PostgreSQL.Database(PostgresServer, PostgresDatabase),
+			    Data = Source{[Schema = "reporting", Item = "candles"]}[Data],
+			    ChangedTypes = Table.TransformColumnTypes(
+			        Data,
+			        {
+			            {"symbol", type text},
+			            {"interval", type text},
+			            {"interval_minutes", Int64.Type},
+			            {"bucket_start", type datetimezone},
+			            {"open", type number},
+			            {"high", type number},
+			            {"low", type number},
+			            {"close", type number},
+			            {"volume", type number},
+			            {"source_candles", Int64.Type}
+			        }
+			    )
+			in
+			    ChangedTypes

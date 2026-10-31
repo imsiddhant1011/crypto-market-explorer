@@ -1,5 +1,7 @@
 # Crypto Market Data Explorer
 
+Link: https://github.com/imsiddhant1011/crypto-market-explorer
+
 An educational **DBMS + data-visualisation** project: 30 days of historical
 1-minute candles for seven crypto pairs are stored in PostgreSQL, aggregated into
 5m / 15m / 30m candles **with SQL**, and displayed as real candlestick and volume
@@ -715,12 +717,16 @@ the FastAPI backend is not involved.
 * Load `symbols` and the `reporting.candles` / `reporting.daily_candles` views.
 * Use `interval` as a slicer (1m / 5m / 15m / 30m) and `bucket_start` as the time
   axis; the views already return complete OHLCV candles.
-* A ready-made connection file, Power Query queries, DAX measures, theme and a
-  step-by-step report layout are in [`powerbi/README.md`](powerbi/README.md).
+* A **ready-made Power BI Project** (`powerbi/CryptoMarketExplorer/`) contains
+  the semantic model, 19 measures, theme and a three-page report — open the
+  `.pbip` on Windows, refresh, and save as `.pbix`.
+* Power Query queries, DAX measures, the connection file and a step-by-step
+  layout guide are in [`powerbi/README.md`](powerbi/README.md).
 
-Power BI Desktop is Windows-only; on macOS use a Windows VM or Power BI Service
-with an on-premises data gateway. The database views and credentials are the
-same either way.
+Power BI Desktop is Windows-only; a `.pbids` file is only a connection shortcut,
+not a report. On macOS, open the ready-made PBIP on a Windows PC/VM (or use
+Power BI Service with an on-premises data gateway), then save it as `.pbix`.
+The database views, PBIP, M and DAX files are the same either way.
 
 ---
 
@@ -955,9 +961,12 @@ crypto-market-explorer/
 │       └── test_reporting_views.py   # Power BI views
 ├── powerbi/
 │   ├── README.md                 # Power BI setup, model, DAX and report layout
+│   ├── CryptoMarketExplorer/     # ready-made PBIP (model + 3-page report)
+│   ├── build_pbip.py             # regenerates the PBIP
 │   ├── crypto-market-explorer.pbids
 │   ├── powerquery.m              # Power Query queries
 │   ├── measures.dax              # DAX measures
+│   ├── templates/                # base theme used by the PBIP
 │   └── theme.json                # report colour theme
 └── frontend/
     ├── Dockerfile

@@ -1,0 +1,2 @@
+expression PostgresServer = "localhost:5432" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+expression PostgresDatabase = "crypto_market_explorer" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]

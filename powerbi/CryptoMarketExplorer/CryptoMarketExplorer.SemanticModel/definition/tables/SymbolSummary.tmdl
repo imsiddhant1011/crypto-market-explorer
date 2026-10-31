@@ -1,0 +1,41 @@
+table SymbolSummary
+	column symbol
+		dataType: string
+		sourceColumn: symbol
+	column first_open_time
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:mm
+		summarizeBy: none
+		sourceColumn: first_open_time
+	column last_open_time
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:mm
+		summarizeBy: none
+		sourceColumn: last_open_time
+	column candle_count
+		dataType: int64
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0
+		summarizeBy: none
+		sourceColumn: candle_count
+	/// Stored one-minute candles for the current pair.
+	measure '1m Candles' = SUM ( SymbolSummary[candle_count] )
+		formatString: #,0
+	partition SymbolSummary = m
+		mode: import
+		source =
+			let
+			    Source = PostgreSQL.Database(PostgresServer, PostgresDatabase),
+			    Data = Source{[Schema = "reporting", Item = "symbol_summary"]}[Data],
+			    ChangedTypes = Table.TransformColumnTypes(
+			        Data,
+			        {
+			            {"symbol", type text},
+			            {"first_open_time", type datetimezone},
+			            {"last_open_time", type datetimezone},
+			            {"candle_count", Int64.Type}
+			        }
+			    )
+			in
+			    ChangedTypes

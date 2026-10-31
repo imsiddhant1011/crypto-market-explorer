@@ -1,0 +1,51 @@
+table LatestPrices
+	column symbol
+		dataType: string
+		isHidden
+		isAvailableInMdx: false
+		sourceColumn: symbol
+	column last_open_time
+		dataType: dateTime
+		isHidden
+		isAvailableInMdx: false
+		formatString: yyyy-mm-dd hh:mm
+		summarizeBy: none
+		sourceColumn: last_open_time
+	column last_close
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: last_close
+	column last_minute_volume
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0
+		summarizeBy: none
+		sourceColumn: last_minute_volume
+	/// Last close of the newest imported minute for the selected pair.
+	measure 'Latest Close' =
+			IF (
+			    HASONEVALUE ( Symbols[symbol] ),
+			    SUM ( LatestPrices[last_close] )
+			)
+		formatString: #,0.00##
+	partition LatestPrices = m
+		mode: import
+		source =
+			let
+			    Source = PostgreSQL.Database(PostgresServer, PostgresDatabase),
+			    Data = Source{[Schema = "reporting", Item = "latest_prices"]}[Data],
+			    ChangedTypes = Table.TransformColumnTypes(
+			        Data,
+			        {
+			            {"symbol", type text},
+			            {"last_open_time", type datetimezone},
+			            {"last_close", type number},
+			            {"last_minute_volume", type number}
+			        }
+			    )
+			in
+			    ChangedTypes

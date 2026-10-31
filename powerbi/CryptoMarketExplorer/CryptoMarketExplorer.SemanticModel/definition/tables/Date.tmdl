@@ -1,0 +1,10 @@
+table Date
+	dataCategory: Time
+	column Date
+		dataType: dateTime
+		isKey
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+	partition Date = calculated
+		mode: import
+		source = CALENDAR ( DATE ( 2026, 9, 28 ), DATE ( 2026, 10, 27 ) )

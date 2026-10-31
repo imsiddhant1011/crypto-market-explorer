@@ -1,0 +1,45 @@
+table Symbols
+	column symbol
+		dataType: string
+		isKey
+		sourceColumn: symbol
+	column base_asset
+		dataType: string
+		sourceColumn: base_asset
+	column quote_asset
+		dataType: string
+		sourceColumn: quote_asset
+	column display_name
+		dataType: string
+		sourceColumn: display_name
+	/// The selected pair name, or All pairs / Multiple pairs for a multi-selection.
+	measure 'Selected Pair' =
+			VAR PairCount = COUNTROWS ( VALUES ( Symbols[display_name] ) )
+			VAR AllPairs = COUNTROWS ( ALL ( Symbols[display_name] ) )
+			RETURN
+			    IF (
+			        PairCount = 1,
+			        SELECTEDVALUE ( Symbols[display_name] ),
+			        IF ( PairCount = AllPairs, "All pairs", "Multiple pairs" )
+			    )
+		formatString: @
+	/// Number of trading pairs in the model.
+	measure 'Pairs Compared' = COUNTROWS ( Symbols )
+		formatString: #,0
+	partition Symbols = m
+		mode: import
+		source =
+			let
+			    Source = PostgreSQL.Database(PostgresServer, PostgresDatabase),
+			    Data = Source{[Schema = "public", Item = "symbols"]}[Data],
+			    ChangedTypes = Table.TransformColumnTypes(
+			        Data,
+			        {
+			            {"symbol", type text},
+			            {"base_asset", type text},
+			            {"quote_asset", type text},
+			            {"display_name", type text}
+			        }
+			    )
+			in
+			    ChangedTypes

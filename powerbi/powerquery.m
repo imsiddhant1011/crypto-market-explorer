@@ -10,6 +10,11 @@
 //   DailyCandles   (fact: one row per complete UTC day)
 //   LatestPrices   (one row per symbol, for KPI cards)
 //   SymbolSummary  (coverage table for the data-quality page)
+//
+// The ready-made PBIP adds two model-only objects on top of these queries:
+//   * a calculated `Date` table (2026-09-28 .. 2026-10-27), and
+//   * `Candles[bucket_date]` (date-only key for the Date relationship).
+// They are TMDL/DAX, not Power Query, so they are not repeated below.
 
 // ---------------------------------------------------------------------------
 // Symbols

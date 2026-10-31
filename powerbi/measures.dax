@@ -1,24 +1,39 @@
 -- Crypto Market Data Explorer - DAX measures
 --
--- Table names used below (rename the Power Query queries exactly like this):
+-- These are the measures in CryptoMarketExplorer.SemanticModel. Table names:
 --   Symbols       : symbols (dimension)
+--   Date          : calculated calendar table (2026-09-28 .. 2026-10-27)
 --   Candles       : reporting.candles (fact, 1m/5m/15m/30m)
 --   DailyCandles  : reporting.daily_candles (fact, one row per day)
 --   LatestPrices  : reporting.latest_prices (one row per symbol)
+--   SymbolSummary : reporting.symbol_summary (coverage per symbol)
 --
 -- Create these with Modeling -> New measure. `--` starts a DAX comment.
 
--- The display name of the pair selected in the slicer.
-Selected Pair =
-SELECTEDVALUE ( Symbols[display_name] )
+-- ---------------------------------------------------------------------------
+-- Symbols
+-- ---------------------------------------------------------------------------
 
--- Last close of the newest imported minute (cards). Works when one pair is
--- selected; use the slicer in single-select mode.
-Latest Close =
-IF (
-    HASONEVALUE ( Symbols[symbol] ),
-    SUM ( LatestPrices[last_close] )
-)
+-- The selected pair name; a summary label when several/all pairs are selected.
+Selected Pair =
+VAR PairCount = COUNTROWS ( VALUES ( Symbols[display_name] ) )
+VAR AllPairs = COUNTROWS ( ALL ( Symbols[display_name] ) )
+RETURN
+    IF (
+        PairCount = 1,
+        SELECTEDVALUE ( Symbols[display_name] ),
+        IF ( PairCount = AllPairs, "All pairs", "Multiple pairs" )
+    )
+
+-- Number of trading pairs in the model.
+Pairs Compared = COUNTROWS ( Symbols )
+
+-- ---------------------------------------------------------------------------
+-- Candles
+-- ---------------------------------------------------------------------------
+
+-- Close price at the current candle granularity.
+Close Price = AVERAGE ( Candles[close] )
 
 -- Highest and lowest price in the current timeframe/date selection.
 Period High = MAX ( Candles[high] )
@@ -30,6 +45,10 @@ Period Volume = SUM ( Candles[volume] )
 -- Number of candles currently visible in the chart.
 Candle Count = COUNTROWS ( Candles )
 
+-- All candle rows across the four intervals, ignoring the interval slicer.
+All Interval Rows =
+CALCULATE ( COUNTROWS ( Candles ), REMOVEFILTERS ( Candles[interval] ) )
+
 -- Return from the first open to the last close of the selected window.
 Period Return % =
 VAR FirstOpen =
@@ -39,7 +58,32 @@ VAR LastClose =
 RETURN
     DIVIDE ( LastClose - FirstOpen, FirstOpen )
 
--- Daily return for the daily-candles table / column chart.
+-- Latest candle timestamp in the current selection.
+Data Through = MAX ( Candles[bucket_start] )
+
+-- ---------------------------------------------------------------------------
+-- LatestPrices
+-- ---------------------------------------------------------------------------
+
+-- Last close of the newest imported minute (cards). Works when one pair is
+-- selected; use the pair slicer in single-select mode.
+Latest Close =
+IF (
+    HASONEVALUE ( Symbols[symbol] ),
+    SUM ( LatestPrices[last_close] )
+)
+
+-- ---------------------------------------------------------------------------
+-- DailyCandles
+-- ---------------------------------------------------------------------------
+
+-- Close price for the day.
+Daily Close = AVERAGE ( DailyCandles[close] )
+
+-- Total traded volume for the day.
+Daily Volume = SUM ( DailyCandles[volume] )
+
+-- Daily return for the daily-candles table / line chart.
 Daily Return % =
 DIVIDE (
     SUM ( DailyCandles[close] ) - SUM ( DailyCandles[open] ),
@@ -68,3 +112,10 @@ AVERAGEX (
     VALUES ( DailyCandles[day_start] ),
     CALCULATE ( SUM ( DailyCandles[volume] ) )
 )
+
+-- ---------------------------------------------------------------------------
+-- SymbolSummary
+-- ---------------------------------------------------------------------------
+
+-- Stored one-minute candles for the current pair.
+1m Candles = SUM ( SymbolSummary[candle_count] )

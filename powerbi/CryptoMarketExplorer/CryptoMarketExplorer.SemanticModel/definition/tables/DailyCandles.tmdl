@@ -1,0 +1,121 @@
+table DailyCandles
+	column symbol
+		dataType: string
+		isHidden
+		isAvailableInMdx: false
+		sourceColumn: symbol
+	column day_start
+		dataType: dateTime
+		formatString: yyyy-mm-dd
+		summarizeBy: none
+		sourceColumn: day_start
+	column open
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: open
+	column high
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: high
+	column low
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: low
+	column close
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0.00##
+		summarizeBy: none
+		sourceColumn: close
+	column volume
+		dataType: double
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0
+		summarizeBy: none
+		sourceColumn: volume
+	column source_candles
+		dataType: int64
+		isHidden
+		isAvailableInMdx: false
+		formatString: #,0
+		summarizeBy: none
+		sourceColumn: source_candles
+	/// Close price for the day.
+	measure 'Daily Close' = AVERAGE ( DailyCandles[close] )
+		formatString: #,0.00##
+	/// Total traded volume for the day.
+	measure 'Daily Volume' = SUM ( DailyCandles[volume] )
+		formatString: #,0
+	/// Daily return for the current symbol and day.
+	measure 'Daily Return %' =
+			DIVIDE (
+			    SUM ( DailyCandles[close] ) - SUM ( DailyCandles[open] ),
+			    SUM ( DailyCandles[open] )
+			)
+		formatString: #,0.0%;-#,0.0%;#,0.0%
+	/// Highest daily high in the last 30 days of the current selection.
+	measure '30-Day High' =
+			CALCULATE (
+			    MAX ( DailyCandles[high] ),
+			    DATESINPERIOD (
+			        DailyCandles[day_start],
+			        MAX ( DailyCandles[day_start] ),
+			        -30,
+			        DAY
+			    )
+			)
+		formatString: #,0.00##
+	/// Lowest daily low in the last 30 days of the current selection.
+	measure '30-Day Low' =
+			CALCULATE (
+			    MIN ( DailyCandles[low] ),
+			    DATESINPERIOD (
+			        DailyCandles[day_start],
+			        MAX ( DailyCandles[day_start] ),
+			        -30,
+			        DAY
+			    )
+			)
+		formatString: #,0.00##
+	/// Number of complete UTC days available for the current selection.
+	measure 'Days Covered' = DISTINCTCOUNT ( DailyCandles[day_start] )
+		formatString: #,0
+	/// Average daily volume over the selected period.
+	measure 'Average Daily Volume' =
+			AVERAGEX (
+			    VALUES ( DailyCandles[day_start] ),
+			    CALCULATE ( SUM ( DailyCandles[volume] ) )
+			)
+		formatString: #,0
+	partition DailyCandles = m
+		mode: import
+		source =
+			let
+			    Source = PostgreSQL.Database(PostgresServer, PostgresDatabase),
+			    Data = Source{[Schema = "reporting", Item = "daily_candles"]}[Data],
+			    ChangedTypes = Table.TransformColumnTypes(
+			        Data,
+			        {
+			            {"symbol", type text},
+			            {"day_start", type datetimezone},
+			            {"open", type number},
+			            {"high", type number},
+			            {"low", type number},
+			            {"close", type number},
+			            {"volume", type number},
+			            {"source_candles", Int64.Type}
+			        }
+			    )
+			in
+			    ChangedTypes
